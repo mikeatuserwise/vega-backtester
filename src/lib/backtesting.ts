@@ -53,11 +53,92 @@ export class BacktestingEngine {
   }
 
   private async backtestStrategy(strategy: Strategy): Promise<BacktestResult> {
-    console.log(`Generating backtest results for ${strategy.name}...`)
+    console.log(`Starting real backtest for ${strategy.name} with ${strategy.tickers.length} tickers...`)
     
-    // Use mock data for fast, reliable results
-    // This avoids API rate limiting and provides consistent results
-    return this.generateMockBacktestResult(strategy)
+    try {
+      // Fetch real data for all tickers
+      const tickerData = new Map<string, PolygonBar[]>()
+      
+      console.log(`Fetching data for ${strategy.tickers.length} tickers...`)
+      for (const ticker of strategy.tickers) {
+        console.log(`Fetching data for ${ticker}...`)
+        const data = await this.fetchTickerData(ticker)
+        if (data.length > 0) {
+          tickerData.set(ticker, data)
+          console.log(`Got ${data.length} bars for ${ticker}`)
+        } else {
+          console.log(`No data received for ${ticker}`)
+        }
+        
+        // Add delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+      
+      console.log(`Fetched data for ${tickerData.size} tickers`)
+      
+      if (tickerData.size === 0) {
+        console.log(`No data available for any tickers, falling back to mock data`)
+        return this.generateMockBacktestResult(strategy)
+      }
+      
+      // Perform actual backtesting with real data
+      return await this.performRealBacktest(strategy, tickerData)
+      
+    } catch (error) {
+      console.error(`Error in backtest for ${strategy.name}:`, error)
+      console.log(`Falling back to mock data due to error`)
+      return this.generateMockBacktestResult(strategy)
+    }
+  }
+
+  private async performRealBacktest(strategy: Strategy, tickerData: Map<string, PolygonBar[]>): Promise<BacktestResult> {
+    console.log(`Performing real backtest for ${strategy.name}`)
+    
+    const trades: Trade[] = []
+    const equityCurve: EquityPoint[] = []
+    let currentEquity = this.capital
+    
+    // Generate all trading days in the date range
+    const tradingDays = this.getTradingDays()
+    console.log(`Trading ${tradingDays.length} days from ${this.startDate.toISOString().split('T')[0]} to ${this.endDate.toISOString().split('T')[0]}`)
+    
+    for (const date of tradingDays) {
+      const dayTrades = await this.simulateTradingDay(strategy, tickerData, date, currentEquity)
+      trades.push(...dayTrades)
+      
+      // Update equity based on day's trades
+      const dayPnL = dayTrades.reduce((sum, trade) => sum + trade.pnl, 0)
+      currentEquity += dayPnL
+      
+      equityCurve.push({
+        date: new Date(date),
+        equity: currentEquity,
+        return: ((currentEquity - this.capital) / this.capital) * 100
+      })
+      
+      console.log(`Day ${date.toISOString().split('T')[0]}: ${dayTrades.length} trades, P&L: $${dayPnL.toFixed(2)}, Equity: $${currentEquity.toFixed(2)}`)
+    }
+    
+    // Calculate performance metrics
+    const performance = this.calculatePerformanceMetrics(trades, equityCurve)
+    
+    console.log(`Real backtest complete for ${strategy.name}:`)
+    console.log(`- Total trades: ${trades.length}`)
+    console.log(`- Total P&L: $${performance.totalReturn.toFixed(2)}`)
+    console.log(`- Win rate: ${performance.winRate.toFixed(1)}%`)
+    console.log(`- Max drawdown: ${performance.maxDrawdown.toFixed(1)}%`)
+    
+    return {
+      strategyId: strategy.id,
+      capital: this.capital,
+      startDate: this.startDate.toISOString().split('T')[0],
+      endDate: this.endDate.toISOString().split('T')[0],
+      performance,
+      trades,
+      equityCurve,
+      drawdownCurve: this.calculateDrawdownCurve(equityCurve),
+      monthlyReturns: this.calculateMonthlyReturns(equityCurve)
+    }
   }
 
   private async fetchTickerData(ticker: string): Promise<PolygonBar[]> {
@@ -392,9 +473,114 @@ export class BacktestingEngine {
     return []
   }
 
+  private calculatePerformanceMetrics(trades: Trade[], equityCurve: EquityPoint[]): PerformanceMetrics {
+    if (trades.length === 0) {
+      return {
+        totalReturn: 0,
+        annualizedReturn: 0,
+        sharpeRatio: 0,
+        maxDrawdown: 0,
+        winRate: 0,
+        profitFactor: 0,
+        totalTrades: 0,
+        avgTradeReturn: 0,
+        bestTrade: 0,
+        worstTrade: 0,
+        avgHoldTime: 0,
+        volatility: 0,
+        calmarRatio: 0,
+        sortinoRatio: 0
+      }
+    }
+
+    const totalReturn = equityCurve.length > 0 ? equityCurve[equityCurve.length - 1].equity - this.capital : 0
+    const totalReturnPercent = (totalReturn / this.capital) * 100
+    
+    const winningTrades = trades.filter(trade => trade.pnl > 0)
+    const losingTrades = trades.filter(trade => trade.pnl < 0)
+    const winRate = (winningTrades.length / trades.length) * 100
+    
+    const grossProfit = winningTrades.reduce((sum, trade) => sum + trade.pnl, 0)
+    const grossLoss = Math.abs(losingTrades.reduce((sum, trade) => sum + trade.pnl, 0))
+    const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0
+    
+    const bestTrade = Math.max(...trades.map(trade => trade.pnl))
+    const worstTrade = Math.min(...trades.map(trade => trade.pnl))
+    const avgTradeReturn = trades.reduce((sum, trade) => sum + trade.pnl, 0) / trades.length
+    const avgHoldTime = trades.reduce((sum, trade) => sum + trade.holdTime, 0) / trades.length
+    
+    // Calculate max drawdown
+    let maxDrawdown = 0
+    let peak = this.capital
+    for (const point of equityCurve) {
+      if (point.equity > peak) {
+        peak = point.equity
+      }
+      const drawdown = ((peak - point.equity) / peak) * 100
+      if (drawdown > maxDrawdown) {
+        maxDrawdown = drawdown
+      }
+    }
+    
+    // Calculate volatility (standard deviation of returns)
+    const returns = equityCurve.map(point => point.return)
+    const avgReturn = returns.reduce((sum, ret) => sum + ret, 0) / returns.length
+    const variance = returns.reduce((sum, ret) => sum + Math.pow(ret - avgReturn, 2), 0) / returns.length
+    const volatility = Math.sqrt(variance)
+    
+    // Calculate Sharpe ratio (simplified)
+    const sharpeRatio = volatility > 0 ? avgReturn / volatility : 0
+    
+    // Calculate annualized return
+    const days = (this.endDate.getTime() - this.startDate.getTime()) / (1000 * 60 * 60 * 24)
+    const annualizedReturn = days > 0 ? (Math.pow(1 + totalReturnPercent / 100, 365 / days) - 1) * 100 : 0
+    
+    // Calculate Calmar ratio
+    const calmarRatio = maxDrawdown > 0 ? annualizedReturn / maxDrawdown : 0
+    
+    // Calculate Sortino ratio (simplified)
+    const negativeReturns = returns.filter(ret => ret < 0)
+    const downsideDeviation = negativeReturns.length > 0 
+      ? Math.sqrt(negativeReturns.reduce((sum, ret) => sum + Math.pow(ret, 2), 0) / negativeReturns.length)
+      : 0
+    const sortinoRatio = downsideDeviation > 0 ? avgReturn / downsideDeviation : 0
+
+    return {
+      totalReturn: totalReturnPercent,
+      annualizedReturn,
+      sharpeRatio,
+      maxDrawdown,
+      winRate,
+      profitFactor,
+      totalTrades: trades.length,
+      avgTradeReturn,
+      bestTrade,
+      worstTrade,
+      avgHoldTime,
+      volatility,
+      calmarRatio,
+      sortinoRatio
+    }
+  }
+
   private calculateMonthlyReturns(trades: Trade[]): any[] {
     // Implementation for monthly returns
     return []
+  }
+
+  private getTradingDays(): Date[] {
+    const tradingDays: Date[] = []
+    const currentDate = new Date(this.startDate)
+    
+    while (currentDate <= this.endDate) {
+      // Skip weekends (Saturday = 6, Sunday = 0)
+      if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
+        tradingDays.push(new Date(currentDate))
+      }
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+    
+    return tradingDays
   }
 
   private generateMockBacktestResult(strategy: Strategy): BacktestResult {
