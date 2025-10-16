@@ -58,7 +58,7 @@ export function StrategyParametersModal({ strategy, isOpen, onClose, onUpdate }:
         end: '16:00'
       },
       avoidNewsMinutes: 20
-    }
+    } as StrategyParameters
   )
 
   const isMicroscalping = strategy?.type === 'microscalping'
