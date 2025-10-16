@@ -35,6 +35,7 @@ export function StrategyParametersModal({ strategy, isOpen, onClose, onUpdate }:
     strategy?.parameters || {
       maxPositions: 3,
       positionSize: 25,
+      riskPerTrade: 0,
       maxDailyTrades: 30,
       stopLoss: 1.5,
       takeProfit: 2,
