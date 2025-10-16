@@ -137,7 +137,7 @@ export class BacktestingEngine {
       trades,
       equityCurve,
       drawdownCurve: this.calculateDrawdownCurve(equityCurve),
-      monthlyReturns: this.calculateMonthlyReturns(equityCurve)
+      monthlyReturns: this.calculateMonthlyReturns(trades)
     }
   }
 
