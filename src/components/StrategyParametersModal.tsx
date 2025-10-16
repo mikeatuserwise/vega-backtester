@@ -58,7 +58,7 @@ export function StrategyParametersModal({ strategy, isOpen, onClose, onUpdate }:
         end: '16:00'
       },
       avoidNewsMinutes: 20
-    } as StrategyParameters
+    }
   )
 
   const isMicroscalping = strategy?.type === 'microscalping'
@@ -555,7 +555,7 @@ export function StrategyParametersModal({ strategy, isOpen, onClose, onUpdate }:
                           step="0.1"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Relative Volume > 1.5 to 2.0x on breakout candle. Confirms institutional participation.
+                          Relative Volume &gt; 1.5 to 2.0x on breakout candle. Confirms institutional participation.
                         </p>
                       </div>
 
