@@ -499,7 +499,7 @@ export function StrategyParametersModal({ strategy, isOpen, onClose, onUpdate }:
                           step="0.1"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Only enter if current 1-minute volume > 1.3× average of last 5 mins — confirms active liquidity.
+                          Only enter if current 1-minute volume &gt; 1.3× average of last 5 mins — confirms active liquidity.
                         </p>
                       </div>
 
@@ -609,7 +609,7 @@ export function StrategyParametersModal({ strategy, isOpen, onClose, onUpdate }:
                           step="0.1"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Reject entries if price too extended >2.5× ATR above VWAP. Avoid chasing exhaustion candles.
+                          Reject entries if price too extended &gt;2.5× ATR above VWAP. Avoid chasing exhaustion candles.
                         </p>
                       </div>
                     </>
