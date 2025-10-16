@@ -140,6 +140,7 @@ export function StrategyComparison({ capital, onStrategiesChange }: StrategyComp
       return {
         maxPositions: 3,
         positionSize: 12, // 10-15% per trade (reduced from 25%)
+        riskPerTrade: 0, // Not used for momentum (uses ATR-based stops)
         maxDailyTrades: 12, // 10-15 trades (selective, not spammed)
         stopLoss: 1.5, // legacy field
         stopLossATR: 1.2, // ATR multiplier for dynamic stops
@@ -179,6 +180,7 @@ export function StrategyComparison({ capital, onStrategiesChange }: StrategyComp
     return {
       maxPositions: 3,
       positionSize: 25,
+      riskPerTrade: 0, // Not used for non-scalping strategies
       maxDailyTrades: 30,
       stopLoss: 1.5,
       takeProfit: 2,
